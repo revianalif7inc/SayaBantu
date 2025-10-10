@@ -1,5 +1,5 @@
-// src/components/ServicesSection.tsx
 import React from "react";
+import axios from "axios";
 import {
   Home, Truck, Wrench, UserCheck, Monitor, Palette,
   ShoppingBag, ShoppingCart, Car, Laptop, Camera,
@@ -21,6 +21,7 @@ type Service = {
 
 type SitePublic = {
   whatsapp_number?: string;
+  whatsapp_message?: string | null;
 };
 
 const API_BASE = "http://localhost:5000";
@@ -40,6 +41,16 @@ const ICONS: Record<string, LucideIcon> = {
   car: Car,
   laptop: Laptop,
   camera: Camera,
+};
+
+/** ================== Utils: samakan dengan Footer ================== */
+const normalizeWa = (n: string) => {
+  const d = (n || "").replace(/\D/g, "");
+  if (!d) return "";
+  if (d.startsWith("62")) return d;
+  if (d.startsWith("0")) return "62" + d.slice(1);
+  if (d.startsWith("8")) return "62" + d;
+  return d;
 };
 
 /** ================== Icon renderer ================== */
@@ -73,7 +84,8 @@ const ServiceIcon: React.FC<{ svc: Service }> = ({ svc }) => {
 /** ================== Section utama (self-fetch) ================== */
 const ServicesSection: React.FC = () => {
   const [services, setServices] = React.useState<Service[]>([]);
-  const [waNumber, setWaNumber] = React.useState<string>("6281234567890");
+  const [waNumber, setWaNumber] = React.useState<string>("");
+  const [waMessage, setWaMessage] = React.useState<string>("Halo, saya butuh bantuan");
   const [loading, setLoading] = React.useState<boolean>(true);
 
   React.useEffect(() => {
@@ -81,16 +93,16 @@ const ServicesSection: React.FC = () => {
     (async () => {
       try {
         // Ambil daftar layanan aktif
-        const svcRes = await fetch(`${API_BASE}/public/services`);
-        const svcData: Service[] = await svcRes.json();
-        if (mounted) setServices(svcData);
+        const svcRes = await axios.get<Service[]>(`${API_BASE}/public/services`);
+        if (mounted) setServices(svcRes.data || []);
 
-        // Ambil nomor WA untuk CTA
-        const siteRes = await fetch(`${API_BASE}/public/site`);
-        const siteData: SitePublic = await siteRes.json();
-        if (mounted && siteData?.whatsapp_number) {
-          // buang tanda + jika ada
-          setWaNumber(String(siteData.whatsapp_number).replace(/^\+/, ""));
+        // Ambil nomor WA & pesan default (konsisten dengan Footer)
+        const siteRes = await axios.get<SitePublic>(`${API_BASE}/public/site`);
+        const siteData = siteRes.data || {};
+        if (mounted) {
+          setWaNumber(siteData.whatsapp_number || "");
+          // gunakan ?? agar string kosong dari DB tetap dipakai (tidak override oleh default)
+          setWaMessage(siteData.whatsapp_message ?? "Halo, saya butuh bantuan");
         }
       } catch (e) {
         console.error("Gagal memuat services/site:", e);
@@ -103,7 +115,10 @@ const ServicesSection: React.FC = () => {
     };
   }, []);
 
-  const waHref = `https://wa.me/${waNumber}?text=Halo,%20saya%20butuh%20bantuan%20untuk%20...`;
+  const waIntl = normalizeWa(waNumber);
+  const waHref = waIntl
+    ? `https://wa.me/${waIntl}?text=${encodeURIComponent(waMessage)}`
+    : "#";
 
   return (
     <section id="services" className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-gray-50 to-white">
@@ -124,7 +139,6 @@ const ServicesSection: React.FC = () => {
 
         {/* Grid Layanan */}
         {loading ? (
-          // Skeleton saat loading
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-12">
             {Array.from({ length: 8 }).map((_, i) => (
               <div
@@ -158,6 +172,8 @@ const ServicesSection: React.FC = () => {
               <a
                 href={waHref}
                 className="inline-flex items-center text-white font-medium hover:text-yellow-200 transition-colors"
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 <MessageCircle className="w-4 h-4 mr-2" />
                 Chat Sekarang
@@ -168,12 +184,17 @@ const ServicesSection: React.FC = () => {
 
         {/* CTA bawah */}
         <div className="text-center">
-          <div className="inline-flex items-center bg-blue-50 text-blue-700 px-6 py-3 rounded-full">
+          <a
+            href={waHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center bg-blue-50 text-blue-700 px-6 py-3 rounded-full hover:bg-blue-100 transition-colors"
+          >
             <MessageCircle className="w-5 h-5 mr-2" />
             <span className="font-medium">
               Tidak menemukan yang Anda cari? Hubungi kami dan kami akan carikan solusinya!
             </span>
-          </div>
+          </a>
         </div>
       </div>
     </section>

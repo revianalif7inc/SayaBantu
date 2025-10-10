@@ -3,13 +3,12 @@ import React, { useEffect, useState } from 'react';
 import { ArrowRight, Clock } from 'lucide-react';
 import { api } from '../lib/api';
 
-/** Normalisasi nomor WA: 08xxxx / 8xxxx -> 62..., biar cocok untuk wa.me */
 const normalizeWa = (raw: string) => {
   const d = (raw || '').replace(/\D/g, '');
   if (!d) return '';
   if (d.startsWith('62')) return d;
-  if (d.startsWith('0'))  return '62' + d.slice(1);
-  if (d.startsWith('8'))  return '62' + d;
+  if (d.startsWith('0')) return '62' + d.slice(1);
+  if (d.startsWith('8')) return '62' + d;
   return d;
 };
 
@@ -18,6 +17,7 @@ const PUBLIC_SITE_PATH =
 
 const HeroSection: React.FC = () => {
   const [waIntl, setWaIntl] = useState<string>('');
+  const [waMessage, setWaMessage] = useState<string>('Halo, Admin SayaBantu.com'); // ✅ default fallback
 
   useEffect(() => {
     let cancelled = false;
@@ -25,19 +25,23 @@ const HeroSection: React.FC = () => {
       try {
         const r = await api.get(PUBLIC_SITE_PATH);
         const wa = normalizeWa(r?.data?.whatsapp_number || '');
-        if (!cancelled && wa) setWaIntl(wa);
+        const msg = r?.data?.whatsapp_message ?? 'Halo, Admin SayaBantu.com'; // ✅ ambil dari DB
+        if (!cancelled) {
+          if (wa) setWaIntl(wa);
+          setWaMessage(msg);
+        }
       } catch (e) {
-        // Jangan berisik kalau endpoint publik belum ada
-        console.warn('Tidak bisa ambil nomor WhatsApp dari endpoint publik:', e);
+        console.warn('Tidak bisa ambil nomor/pesan WhatsApp dari endpoint publik:', e);
       }
     };
     fetchWhatsAppNumber();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const defaultMsg = 'Halo, saya butuh bantuan';
   const waHref = waIntl
-    ? `https://wa.me/${waIntl}?text=${encodeURIComponent(defaultMsg)}`
+    ? `https://wa.me/${waIntl}?text=${encodeURIComponent(waMessage)}`
     : undefined;
 
   return (
@@ -74,6 +78,8 @@ const HeroSection: React.FC = () => {
               {waHref && (
                 <a
                   href={waHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center justify-center bg-gradient-to-r from-green-500 to-green-600 text-white px-8 py-4 rounded-full text-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
                 >
                   Pesan via WhatsApp
@@ -81,7 +87,9 @@ const HeroSection: React.FC = () => {
                 </a>
               )}
               <button
-                onClick={() => document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' })}
+                onClick={() =>
+                  document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' })
+                }
                 className="inline-flex items-center justify-center border-2 border-blue-600 text-blue-600 px-8 py-4 rounded-full text-lg font-semibold hover:bg-blue-600 hover:text-white transition-all duration-300"
               >
                 Lihat Layanan

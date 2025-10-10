@@ -73,12 +73,14 @@ const q = (sql, params = []) =>
     .query(sql, params)
     .then(([rows]) => rows);
 
+// Utility function untuk menangani error dari query database
 const sendDbError = (res, err, label) => {
-  console.error(label || "DB ERROR", {
-    message: err?.message,
-    sqlMessage: err?.sqlMessage,
-    sql: err?.sql,
+  console.error(`[${label}] Error occurred:`, {
+    message: err?.message || err?.sqlMessage,
+    stack: err?.stack,
+    sql: err?.sql || 'No SQL query available',
   });
+
   res.status(500).json({
     error: "Database error",
     detail: err?.sqlMessage || err?.message,
@@ -150,27 +152,20 @@ async function getPrimaryLogoUrl() {
   }
 }
 
-async function getPrimaryWa() {
+async function getPrimaryWaFull() {
   try {
-    return (
-      (
-        await q(
-          "SELECT phone FROM whatsapp_numbers WHERE is_primary=1 AND is_active=1 ORDER BY id DESC LIMIT 1"
-        )
-      )[0]?.phone || ""
+    const rows = await q(
+      "SELECT phone, whatsapp_message FROM whatsapp_numbers WHERE is_primary=1 AND is_active=1 ORDER BY id DESC LIMIT 1"
     );
+    if (rows.length) return rows[0];
   } catch (e) {
-    console.warn(
-      "Primary WA query failed -> fallback:",
-      e.sqlMessage || e.message
-    );
-    return (
-      (await q("SELECT phone FROM whatsapp_numbers ORDER BY id DESC LIMIT 1"))[0]
-        ?.phone || ""
-    );
+    console.warn("Primary WA query failed -> fallback:", e.sqlMessage || e.message);
   }
+  const rows2 = await q(
+    "SELECT phone, whatsapp_message FROM whatsapp_numbers ORDER BY id DESC LIMIT 1"
+  );
+  return rows2[0] || { phone: "", whatsapp_message: "" };
 }
-
 // untuk PUT /settings (pakai transaction `conn`)
 async function updateLogoPrimary(conn, url) {
   const run = async (sql, params = []) => (await conn.query(sql, params))[0];
@@ -203,35 +198,23 @@ async function updateLogoPrimary(conn, url) {
 async function updateWaPrimary(conn, phone) {
   const run = async (sql, params = []) => (await conn.query(sql, params))[0];
   try {
-    const rows = await run(
-      "SELECT id FROM whatsapp_numbers WHERE is_primary=1 LIMIT 1"
-    );
+    const rows = await run("SELECT id FROM whatsapp_numbers WHERE is_primary=1 LIMIT 1");
     if (rows.length) {
-      await run("UPDATE whatsapp_numbers SET phone=?, is_active=1 WHERE id=?", [
-        phone,
-        rows[0].id,
-      ]);
+      await run("UPDATE whatsapp_numbers SET phone=?, is_active=1 WHERE id=?", [phone, rows[0].id]);
     } else {
-      await run(
-        "INSERT INTO whatsapp_numbers (label, phone, is_primary, is_active) VALUES ('umum', ?, 1, 1)",
-        [phone]
-      );
+      await run("INSERT INTO whatsapp_numbers (label, phone, is_primary, is_active) VALUES ('umum', ?, 1, 1)", [phone]);
     }
   } catch (e) {
     console.warn("updateWaPrimary fallback:", e.sqlMessage || e.message);
-    const rows = await run(
-      "SELECT id FROM whatsapp_numbers ORDER BY id DESC LIMIT 1"
-    );
+    const rows = await run("SELECT id FROM whatsapp_numbers ORDER BY id DESC LIMIT 1");
     if (rows.length) {
-      await run("UPDATE whatsapp_numbers SET phone=? WHERE id=?", [
-        phone,
-        rows[0].id,
-      ]);
+      await run("UPDATE whatsapp_numbers SET phone=? WHERE id=?", [phone, rows[0].id]);
     } else {
       await run("INSERT INTO whatsapp_numbers (phone) VALUES (?)", [phone]);
     }
   }
 }
+
 
 /* ----------------------------------------------------------------------------
  * SETTINGS routes (admin)
@@ -239,47 +222,48 @@ async function updateWaPrimary(conn, phone) {
 app.get("/settings", authenticateToken, adminOnly, async (req, res) => {
   try {
     const logo_url = await getPrimaryLogoUrl();
-    const whatsapp_number = await getPrimaryWa();
-    res.json({ logo_url, whatsapp_number });
+    const wa = await getPrimaryWaFull(); // <—
+    res.json({
+      logo_url,
+      whatsapp_number: wa?.phone || "",
+      whatsapp_message: wa?.whatsapp_message || ""  // <— penting
+    });
   } catch (e) {
     sendDbError(res, e, "GET /settings");
   }
 });
 
-app.put(
-  "/settings",
-  authenticateToken,
-  adminOnly,
-  upload.single("logo"),
-  async (req, res) => {
-    const file = req.file;
-    const { whatsapp_number } = req.body;
-
-    const conn = await db.promise().getConnection();
-    try {
-      await conn.beginTransaction();
-
-      if (file) {
-        const url = `/uploads/${file.filename}`;
-        await updateLogoPrimary(conn, url);
-      }
-      if (whatsapp_number) {
-        await updateWaPrimary(conn, whatsapp_number);
-      }
-
-      await conn.commit();
-      res.json({ ok: true });
-    } catch (e) {
-      await conn.rollback();
-      sendDbError(res, e, "PUT /settings");
-    } finally {
-      conn.release();
+// Endpoint untuk memperbarui pengaturan WhatsApp
+app.put("/settings/whatsapp", authenticateToken, adminOnly, async (req, res) => {
+  try {
+    const { whatsapp_number, whatsapp_message } = req.body;
+    if (!whatsapp_number || !whatsapp_message) {
+      return res.status(400).json({ error: "Nomor WhatsApp dan pesan tidak boleh kosong." });
     }
+
+    // Update nomor WhatsApp dan pesan
+    const rows = await q("SELECT id FROM whatsapp_numbers WHERE is_primary=1 LIMIT 1");
+    if (rows.length) {
+      // Pastikan tidak ada koma setelah rows[0].id
+      await q("UPDATE whatsapp_numbers SET phone=?, whatsapp_message=?, is_active=1 WHERE id=?", [whatsapp_number, whatsapp_message, rows[0].id]);
+    } else {
+      await q("INSERT INTO whatsapp_numbers (label, phone, whatsapp_message, is_primary, is_active) VALUES ('umum', ?, ?, 1, 1)", [whatsapp_number, whatsapp_message]);
+    }
+
+    return res.json({
+      ok: true,
+      whatsapp_number,
+      whatsapp_message
+    });
+  } catch (e) {
+    sendDbError(res, e, "PUT /settings/whatsapp");
   }
-);
+});
+
 
 app.delete("/settings/logo", authenticateToken, adminOnly, async (req, res) => {
   try {
+    // Cari logo utama yang terpasang di header
     let id;
     try {
       id = (
@@ -293,9 +277,13 @@ app.delete("/settings/logo", authenticateToken, adminOnly, async (req, res) => {
         e.sqlMessage || e.message
       );
     }
-    if (!id) id = (await q("SELECT id FROM logos ORDER BY id DESC LIMIT 1"))[0]?.id;
-    if (!id) return res.status(404).json({ error: "Not found" });
 
+    // Jika tidak ada logo utama di header, cari logo terakhir
+    if (!id) id = (await q("SELECT id FROM logos ORDER BY id DESC LIMIT 1"))[0]?.id;
+
+    if (!id) return res.status(404).json({ error: "Logo not found" });
+
+    // Hapus logo berdasarkan ID
     await q("DELETE FROM logos WHERE id=?", [id]);
     res.json({ ok: true });
   } catch (e) {
@@ -309,6 +297,7 @@ app.delete(
   adminOnly,
   async (req, res) => {
     try {
+      // Cari nomor WhatsApp utama
       let id;
       try {
         id = (
@@ -320,12 +309,16 @@ app.delete(
           e.sqlMessage || e.message
         );
       }
+
+      // Jika tidak ada nomor WhatsApp utama, cari nomor WhatsApp terakhir
       if (!id)
         id = (
           await q("SELECT id FROM whatsapp_numbers ORDER BY id DESC LIMIT 1")
         )[0]?.id;
-      if (!id) return res.status(404).json({ error: "Not found" });
 
+      if (!id) return res.status(404).json({ error: "WhatsApp number not found" });
+
+      // Hapus nomor WhatsApp berdasarkan ID
       await q("DELETE FROM whatsapp_numbers WHERE id=?", [id]);
       res.json({ ok: true });
     } catch (e) {
@@ -334,11 +327,11 @@ app.delete(
   }
 );
 
+
 /* ----------------------------------------------------------------------------
  * CRUD SERVICES/EMAILS/ADDRESSES/SOCIALS (admin)
  * --------------------------------------------------------------------------*/
 
-// Endpoint untuk mendapatkan semua layanan
 // Endpoint untuk mendapatkan semua layanan
 app.get("/services", authenticateToken, adminOnly, async (req, res) => {
   try {
@@ -349,7 +342,6 @@ app.get("/services", authenticateToken, adminOnly, async (req, res) => {
   }
 });
 
-// Endpoint untuk menambahkan layanan baru
 // Endpoint untuk mendapatkan semua layanan
 app.get("/services", authenticateToken, adminOnly, async (req, res) => {
   try {
@@ -427,28 +419,39 @@ app.post(
   }
 );
 
+app.put('/api/whatsapp-message', async (req, res) => {
+  const { message } = req.body;
+  try {
+    // Update pesan di database
+    await db.query('UPDATE whatsapp_messages SET message = $1 WHERE id = 1', [message]);
+    res.status(200).send('Pesan berhasil diperbarui');
+  } catch (error) {
+    res.status(500).json({ error: 'Gagal memperbarui pesan' });
+  }
+});
+
 // Endpoint untuk mengedit layanan berdasarkan ID
 app.put(
   "/services/:id",
-  authenticateToken, 
-  adminOnly,        
+  authenticateToken,
+  adminOnly,
   upload.single("icon_file"),  // Upload file ikon jika ada
   async (req, res) => {
     try {
       const { id } = req.params;
-      const { 
-        name, 
-        short_name, 
-        slug, 
-        summary, 
-        description, 
-        icon_type, 
-        icon_bg, 
-        price_min, 
-        price_unit, 
-        is_popular, 
-        is_active, 
-        sort_order 
+      const {
+        name,
+        short_name,
+        slug,
+        summary,
+        description,
+        icon_type,
+        icon_bg,
+        price_min,
+        price_unit,
+        is_popular,
+        is_active,
+        sort_order
       } = req.body;
 
       if (!name || !slug) {
@@ -764,14 +767,16 @@ app.delete("/socials/:id", authenticateToken, adminOnly, async (req, res) => {
  * --------------------------------------------------------------------------*/
 app.get("/public/site", async (req, res) => {
   try {
+    // Ambil logo
     const [logo] = await q(
       "SELECT url FROM logos WHERE is_primary=1 AND is_active=1 ORDER BY id DESC LIMIT 1"
     ).catch(async () => await q("SELECT url FROM logos ORDER BY id DESC LIMIT 1"));
 
+    // Ambil nomor WhatsApp dan pesan default
     const [wa] = await q(
-      "SELECT phone FROM whatsapp_numbers WHERE is_primary=1 AND is_active=1 ORDER BY id DESC LIMIT 1"
+      "SELECT phone, whatsapp_message FROM whatsapp_numbers WHERE is_primary=1 AND is_active=1 ORDER BY id DESC LIMIT 1"
     ).catch(
-      async () => await q("SELECT phone FROM whatsapp_numbers ORDER BY id DESC LIMIT 1")
+      async () => await q("SELECT phone, whatsapp_message FROM whatsapp_numbers ORDER BY id DESC LIMIT 1")
     );
 
     const emails = await q(
@@ -783,13 +788,16 @@ app.get("/public/site", async (req, res) => {
     const socials = await q(
       "SELECT id,platform,handle,url,icon_type,icon_value,sort_order,is_active FROM social_links WHERE is_active=1 ORDER BY sort_order ASC, id ASC"
     );
+
     res.json({
-      logo_url: logo?.url || "",
-      whatsapp_number: wa?.phone || "",
-      emails,
-      addresses,
-      socials,
-    });
+  logo_url: logo?.url || "",
+  whatsapp_number: wa?.phone || "",
+  // gunakan ?? agar pesan kosong tetap ditampilkan sesuai isi database
+  whatsapp_message: wa?.whatsapp_message ?? "Pesan default",
+  emails,
+  addresses,
+  socials,
+});
   } catch (e) {
     sendDbError(res, e, "GET /public/site");
   }

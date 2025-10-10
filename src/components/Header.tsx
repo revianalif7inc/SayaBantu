@@ -17,14 +17,13 @@ function parseJwt(token: string | null): any | null {
 const API_BASE = 'http://localhost:5000';
 const cdn = (u?: string) => (u ? (u.startsWith('/uploads') ? `${API_BASE}${u}` : u) : '');
 
-// ✅ tempel fungsi normalisasi WA di sini
 const normalizeWa = (n: string) => {
   const d = (n || '').replace(/\D/g, '');
   if (!d) return '';
-  if (d.startsWith('62')) return d;         // sudah format internasional
-  if (d.startsWith('0'))  return '62' + d.slice(1); // 08xx -> 62xx
-  if (d.startsWith('8'))  return '62' + d;         // 8xx -> 62xx
-  return d; // fallback
+  if (d.startsWith('62')) return d;
+  if (d.startsWith('0')) return '62' + d.slice(1);
+  if (d.startsWith('8')) return '62' + d;
+  return d;
 };
 
 const Header: React.FC = () => {
@@ -35,6 +34,7 @@ const Header: React.FC = () => {
 
   const [logoUrl, setLogoUrl] = useState<string>('');
   const [waNumber, setWaNumber] = useState<string>('');
+  const [waMessage, setWaMessage] = useState<string>('Halo, saya butuh bantuan'); // ✅ default fallback
 
   const navigate = useNavigate();
 
@@ -51,13 +51,14 @@ const Header: React.FC = () => {
     setRole(payload?.role ?? null);
   }, []);
 
-  // Ambil logo & WA dari endpoint publik
+  // ✅ Ambil logo, nomor WA, dan pesan WA dari database
   useEffect(() => {
     const fetchPublic = async () => {
       try {
         const { data } = await axios.get(`${API_BASE}/public/site`);
         setLogoUrl(cdn(data?.logo_url));
         setWaNumber(data?.whatsapp_number || '');
+        setWaMessage(data?.whatsapp_message ?? 'Halo, saya butuh bantuan');
       } catch (e) {
         console.error('Gagal mengambil data public/site:', e);
       }
@@ -86,10 +87,10 @@ const Header: React.FC = () => {
     }
   };
 
-  // ✅ pakai nomor yang sudah dinormalisasi untuk link WA
+  // ✅ Gunakan waMessage dari database
   const waIntl = normalizeWa(waNumber);
   const waHref = waIntl
-    ? `https://wa.me/${waIntl}?text=${encodeURIComponent('Halo, saya butuh bantuan')}`
+    ? `https://wa.me/${waIntl}?text=${encodeURIComponent(waMessage)}`
     : '#';
 
   return (
@@ -133,6 +134,8 @@ const Header: React.FC = () => {
           <div className="hidden md:flex items-center space-x-4">
             <a
               href={waHref}
+              target="_blank"
+              rel="noopener noreferrer"
               className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-2 rounded-full font-medium hover:from-green-600 hover:to-green-700 transition-all duration-300 shadow-lg"
             >
               Hubungi Kami
@@ -171,6 +174,8 @@ const Header: React.FC = () => {
 
               <a
                 href={waHref}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-2 rounded-full font-medium text-center hover:from-green-600 hover:to-green-700 transition-all duration-300"
               >
                 Hubungi Kami

@@ -1,10 +1,15 @@
 // src/components/SettingsPage.tsx
 import React, { useEffect, useState } from 'react';
-import { api } from '../lib/api'; 
+import { api } from '../lib/api';
 
-const useAuthHeader = () => ({
-  Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-});
+const useAuthHeader = () => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    console.error('Token tidak ditemukan di localStorage');
+  }
+  return { Authorization: `Bearer ${token || ''}` };
+};
+
 
 /* ================= tipe data ================= */
 export type Service = {
@@ -15,7 +20,7 @@ export type Service = {
   summary?: string | null;
   description?: string | null;
   icon_type?: 'emoji' | 'svg' | 'image';
-  icon_value?: string | null; 
+  icon_value?: string | null;
   icon_bg?: string | null;
   price_min?: number | null;
   price_unit?: string | null;
@@ -49,14 +54,14 @@ export type Address = {
 export type Social = {
   id: number;
   platform:
-    | 'instagram'
-    | 'facebook'
-    | 'tiktok'
-    | 'x'
-    | 'youtube'
-    | 'linkedin'
-    | 'whatsapp'
-    | 'other';
+  | 'instagram'
+  | 'facebook'
+  | 'tiktok'
+  | 'x'
+  | 'youtube'
+  | 'linkedin'
+  | 'whatsapp'
+  | 'other';
   handle?: string | null;
   url: string;
   icon_type?: 'iconset' | 'svg' | 'image';
@@ -86,49 +91,49 @@ const formatErr = (e: any) => {
 
 const UIStyles = () => (
   <style>{`
-    :root{
-      --sb-green:#10b981; --sb-green-600:#059669; --sb-green-50:#ecfdf5;
-      --sb-border:#e5e7eb; --sb-text:#111827; --sb-muted:#6b7280;
-      --sb-danger:#ef4444; --sb-bg:#ffffff; --sb-surface:#ffffff;
-    }
-    .sb-container{max-width:1100px;margin:0 auto;padding:16px}
-    .sb-h1{font-size:22px;font-weight:700;margin:6px 0 16px}
-    .sb-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
-    .sb-tab{padding:8px 12px;border-radius:10px;border:1px solid var(--sb-border);background:#fff;
-      color:var(--sb-text);font-weight:700;line-height:1}
-    .sb-tab--active{background:var(--sb-green);border-color:var(--sb-green);color:#fff}
-    .sb-card{border:1px solid var(--sb-border);border-radius:12px;background:var(--sb-surface);
-      padding:14px}
-    .sb-card + .sb-card{margin-top:16px}
-    .sb-card h3{margin:0 0 10px;font-size:16px}
-    .sb-row{display:flex;align-items:center;gap:8px}
-    .sb-spacer{height:12px}
-    .sb-btn{appearance:none;border:1px solid var(--sb-border);background:#fff;border-radius:10px;
-      padding:8px 12px;font-weight:600;cursor:pointer}
-    .sb-btn--primary{background:var(--sb-green);border-color:var(--sb-green);color:#fff}
-    .sb-btn--danger{background:var(--sb-danger);border-color:var(--sb-danger);color:#fff}
-    .sb-btn:disabled{opacity:.6;cursor:not-allowed}
-    .sb-link{background:none;border:none;color:var(--sb-green-600);font-weight:700;cursor:pointer}
-    .sb-link--danger{color:var(--sb-danger)}
-    .sb-input, .sb-select, .sb-textarea{
-      width:100%;border:1px solid var(--sb-border);border-radius:10px;padding:9px 10px;
-      background:#fff;outline:none
-    }
-    .sb-field{display:flex;flex-direction:column;gap:6px}
-    .sb-field label{font-size:12px;color:var(--sb-muted);font-weight:600}
-    .sb-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .sb-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-    @media (max-width: 820px){ .sb-grid-2, .sb-grid-3{grid-template-columns:1fr} }
-    .sb-table-wrap{border:1px solid var(--sb-border);border-radius:12px;overflow:auto}
-    table.sb-table{width:100%;border-collapse:separate;border-spacing:0}
-    .sb-table th,.sb-table td{padding:10px 12px;border-bottom:1px solid var(--sb-border);vertical-align:top}
-    .sb-table th{background:var(--sb-green-50);text-align:left;position:sticky;top:0;z-index:1}
-    .sb-badge{display:inline-flex;align-items:center;justify-content:center;min-width:24px;
-      height:24px;border-radius:999px;border:1px solid var(--sb-border);font-size:12px}
-    .sb-badge--ok{background:#ecfdf5;border-color:#bbf7d0;color:#065f46}
-    .sb-url{word-break:break-all;color:#0ea5e9'}
-    .sb-msg{color:#b91c1c;margin:0 0 8px}
-  `}</style>
+      :root{
+        --sb-green:#10b981; --sb-green-600:#059669; --sb-green-50:#ecfdf5;
+        --sb-border:#e5e7eb; --sb-text:#111827; --sb-muted:#6b7280;
+        --sb-danger:#ef4444; --sb-bg:#ffffff; --sb-surface:#ffffff;
+      }
+      .sb-container{max-width:1100px;margin:0 auto;padding:16px}
+      .sb-h1{font-size:22px;font-weight:700;margin:6px 0 16px}
+      .sb-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+      .sb-tab{padding:8px 12px;border-radius:10px;border:1px solid var(--sb-border);background:#fff;
+        color:var(--sb-text);font-weight:700;line-height:1}
+      .sb-tab--active{background:var(--sb-green);border-color:var(--sb-green);color:#fff}
+      .sb-card{border:1px solid var(--sb-border);border-radius:12px;background:var(--sb-surface);
+        padding:14px}
+      .sb-card + .sb-card{margin-top:16px}
+      .sb-card h3{margin:0 0 10px;font-size:16px}
+      .sb-row{display:flex;align-items:center;gap:8px}
+      .sb-spacer{height:12px}
+      .sb-btn{appearance:none;border:1px solid var(--sb-border);background:#fff;border-radius:10px;
+        padding:8px 12px;font-weight:600;cursor:pointer}
+      .sb-btn--primary{background:var(--sb-green);border-color:var(--sb-green);color:#fff}
+      .sb-btn--danger{background:var(--sb-danger);border-color:var(--sb-danger);color:#fff}
+      .sb-btn:disabled{opacity:.6;cursor:not-allowed}
+      .sb-link{background:none;border:none;color:var(--sb-green-600);font-weight:700;cursor:pointer}
+      .sb-link--danger{color:var(--sb-danger)}
+      .sb-input, .sb-select, .sb-textarea{
+        width:100%;border:1px solid var(--sb-border);border-radius:10px;padding:9px 10px;
+        background:#fff;outline:none
+      }
+      .sb-field{display:flex;flex-direction:column;gap:6px}
+      .sb-field label{font-size:12px;color:var(--sb-muted);font-weight:600}
+      .sb-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+      .sb-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+      @media (max-width: 820px){ .sb-grid-2, .sb-grid-3{grid-template-columns:1fr} }
+      .sb-table-wrap{border:1px solid var(--sb-border);border-radius:12px;overflow:auto}
+      table.sb-table{width:100%;border-collapse:separate;border-spacing:0}
+      .sb-table th,.sb-table td{padding:10px 12px;border-bottom:1px solid var(--sb-border);vertical-align:top}
+      .sb-table th{background:var(--sb-green-50);text-align:left;position:sticky;top:0;z-index:1}
+      .sb-badge{display:inline-flex;align-items:center;justify-content:center;min-width:24px;
+        height:24px;border-radius:999px;border:1px solid var(--sb-border);font-size:12px}
+      .sb-badge--ok{background:#ecfdf5;border-color:#bbf7d0;color:#065f46}
+      .sb-url{word-break:break-all;color:#0ea5e9'}
+      .sb-msg{color:#b91c1c;margin:0 0 8px}
+    `}</style>
 );
 
 const TabBtn: React.FC<{
@@ -196,12 +201,12 @@ const PanelLogo: React.FC = () => {
       setCurrentLogo(r.data.logo_url || '');
       setMsg('');
     } catch (e: any) {
-      setMsg(`Gagal memuat ${formatErr(e)}`);
+      setMsg(`Gagal memuat logo ${formatErr(e)}`);
     }
   };
+
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const simpan = async (e: React.FormEvent) => {
@@ -217,7 +222,7 @@ const PanelLogo: React.FC = () => {
       setMsg('Logo berhasil diperbarui.');
       await load();
     } catch (e: any) {
-      setMsg(`Gagal menyimpan ${formatErr(e)}`);
+      setMsg(`Gagal menyimpan logo ${formatErr(e)}`);
     }
   };
 
@@ -233,10 +238,9 @@ const PanelLogo: React.FC = () => {
 
   const resolveLogoUrl = (url: string) => {
     if (!url) return '';
-    // kalau sudah absolute (http/https), langsung pakai
+    // jika URL sudah absolute (http/https), gunakan langsung
     if (!url.startsWith('/uploads')) return url;
 
-    // ambil baseURL dari axios instance dan hilangkan trailing slash
     const base = (api.defaults.baseURL ?? '').replace(/\/$/, '');
     return `${base}${url}`;
   };
@@ -276,36 +280,50 @@ const PanelLogo: React.FC = () => {
   );
 };
 
+
 /* ================= Panel: WhatsApp ================= */
 const PanelWhatsApp: React.FC = () => {
   const headers = useAuthHeader();
   const [wa, setWa] = useState('');
+  const [waMsg, setWaMsg] = useState('Halo, saya butuh bantuan.');
   const [current, setCurrent] = useState('');
   const [msg, setMsg] = useState('');
 
   const load = async () => {
     try {
-      const r = await api.get('/settings', { headers });
-      setCurrent(r.data.whatsapp_number || '');
-      setWa(r.data.whatsapp_number || '');
+      const response = await api.get('/settings', { headers });
+      setCurrent(response.data.whatsapp_number || '');
+      setWa(response.data.whatsapp_number || '');
+      setWaMsg(response.data.whatsapp_message || 'Halo, saya butuh bantuan.');
       setMsg('');
     } catch (e: any) {
-      setMsg(`Gagal memuat data ${formatErr(e)}`);
+      setMsg(`Gagal memuat data: ${formatErr(e)}`);
     }
   };
+
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const simpan = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!wa || !waMsg) {
+      return setMsg('Nomor WhatsApp atau pesan tidak boleh kosong.');
+    }
+
     try {
-      await api.put('/settings', { whatsapp_number: wa }, { headers: { ...headers, 'Content-Type': 'application/json' } });
-      setMsg('Nomor WA diperbarui.');
-      await load();
+      const response = await api.put('/settings/whatsapp', {
+        whatsapp_number: wa,
+        whatsapp_message: waMsg, 
+      }, { headers });
+
+
+      if (response.status === 200) {
+        setMsg('Pengaturan WhatsApp berhasil diperbarui.');
+        await load(); // Reload data setelah berhasil menyimpan
+      }
     } catch (e: any) {
-      setMsg(`Gagal menyimpan ${formatErr(e)}`);
+      setMsg(`Gagal menyimpan pengaturan WhatsApp: ${formatErr(e)}`);
     }
   };
 
@@ -315,16 +333,21 @@ const PanelWhatsApp: React.FC = () => {
       await api.delete('/settings/whatsapp', { headers });
       await load();
     } catch (e: any) {
-      setMsg(`Gagal menghapus ${formatErr(e)}`);
+      setMsg(`Gagal menghapus: ${formatErr(e)}`);
     }
   };
 
   return (
     <>
       {msg && <p className="sb-msg">{msg}</p>}
+
       <div className="sb-card">
-        <h3>Nomor Saat Ini</h3>
+        <h3>Nomor & Pesan Whatsapp Saat Ini</h3>
         <p style={{ margin: 0 }}>{current || <em>- belum ada -</em>}</p>
+        {/* preview pesan */}
+        <p style={{ margin: 0, color: 'var(--sb-muted)' }}>
+          {waMsg ? `Pesan: ${waMsg}` : ''}
+        </p>
         <div className="sb-spacer" />
         <button onClick={hapus} className="sb-btn sb-btn--danger" disabled={!current}>
           Hapus Nomor WA
@@ -332,23 +355,38 @@ const PanelWhatsApp: React.FC = () => {
       </div>
 
       <div className="sb-card">
-        <h3>Ubah Nomor WA</h3>
+        <h3>Ubah Nomor & Pesan WhatsApp</h3>
         <form onSubmit={simpan} className="sb-grid-2">
-          <div className="sb-field" style={{ gridColumn: '1 / -1', maxWidth: 360 }}>
-            <label>Nomor WhatsApp</label>
-            <input className="sb-input" type="text" value={wa} onChange={(e) => setWa(e.target.value)} placeholder="+628xxx" />
+          <div className="sb-field" style={{ gridColumn: '1 / -1' }}>
+            <label>Pesan default saat user klik</label>
+            <textarea
+              className="sb-textarea"
+              rows={3}
+              maxLength={500}
+              value={waMsg}
+              onChange={(e) => setWaMsg(e.target.value)}
+              placeholder="Halo, saya butuh bantuan."
+            />
+            <small className="text-muted">
+              Token: {`{site}`} dan {`{page}`} akan diganti otomatis saat diklik.
+            </small>
           </div>
+
+          <div className="sb-field" style={{ gridColumn: '1 / -1' }}>
+            <label>Nomor WhatsApp</label>
+            <input
+              className="sb-input"
+              type="text"
+              value={wa}
+              onChange={(e) => setWa(e.target.value)}
+              placeholder="+628xxx"
+            />
+          </div>
+
           <div style={{ gridColumn: '1 / -1' }}>
-            <button className="sb-btn sb-btn--primary" type="submit">
-              Simpan Nomor
+            <button className="sb-btn sb-btn--primary" type="submit" disabled={!wa || !waMsg}>
+              Simpan
             </button>
-            {current && (
-              <a href={`https://wa.me/${current}`} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 8 }}>
-                <button type="button" className="sb-btn">
-                  Pesan via WhatsApp
-                </button>
-              </a>
-            )}
           </div>
         </form>
       </div>
@@ -356,8 +394,8 @@ const PanelWhatsApp: React.FC = () => {
   );
 };
 
+
 //===================PANEL SERVICE==================//
-// GANTI seluruh component PanelServices dengan kode ini
 const PanelServices: React.FC = () => {
   const headers = useAuthHeader();
   const [rows, setRows] = useState<Service[]>([]);
@@ -526,7 +564,7 @@ const PanelServices: React.FC = () => {
 
   const handleEdit = (service: Service) => {
     setForm(service);
-    setIconFile(null);  
+    setIconFile(null);
   };
 
   const handleDelete = async (id: number) => {
@@ -1147,7 +1185,6 @@ const PanelUsers: React.FC = () => {
               <label>Role</label>
               <select className="sb-select" value={form.role} onChange={e => setForm({ ...form, role: e.target.value as 'admin' | 'user' })}>
                 <option value="admin">Admin</option>
-                <option value="user">User</option>
               </select>
             </div>
           </div>
@@ -1188,3 +1225,4 @@ const SettingsPage: React.FC = () => {
 };
 
 export default SettingsPage;
+

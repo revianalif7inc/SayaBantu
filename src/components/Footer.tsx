@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import {
   Instagram, Facebook, Twitter, Youtube, Linkedin,
   Mail, MapPin, Clock, MessageCircle, LucideProps
-} from 'lucide-react';  // TikTok akan diganti menggunakan CDN atau react-icons
+} from 'lucide-react';
 import axios from 'axios';
-import { FaTiktok } from 'react-icons/fa';  // Solusi menggunakan react-icons
+import { FaTiktok } from 'react-icons/fa';
 
 type SocialLink = { id: number; platform: string; url: string; };
 type Email = { id: number; label: string | null; email: string; is_primary: number; is_active: number; };
@@ -26,23 +26,21 @@ const socialIcons: { [key: string]: React.FC<LucideProps> } = {
   x: Twitter,
   youtube: Youtube,
   linkedin: Linkedin,
-  tiktok: FaTiktok,  // Menggunakan ikon TikTok dari react-icons
+  tiktok: FaTiktok,
 };
 
 const cdn = (u?: string) =>
   !u ? '' : u.startsWith('/uploads') ? `http://localhost:5000${u}` : u;
 
-// Normalisasi nomor WA → 62xxxxxxxxxx
 const normalizeWa = (n: string) => {
   const d = (n || '').replace(/\D/g, '');
   if (!d) return '';
   if (d.startsWith('62')) return d;
-  if (d.startsWith('0'))  return '62' + d.slice(1);
-  if (d.startsWith('8'))  return '62' + d;
+  if (d.startsWith('0')) return '62' + d.slice(1);
+  if (d.startsWith('8')) return '62' + d;
   return d;
 };
 
-// Fallback URL maps jika admin tidak mengisi maps_url
 const mapHref = (a: Address) => {
   const manual = [a.address_line, a.city, a.province, a.postal_code]
     .filter(Boolean)
@@ -52,7 +50,6 @@ const mapHref = (a: Address) => {
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(manual)}`;
 };
 
-// Format teks alamat yang ditampilkan
 const addrText = (a: Address) =>
   [a.address_line, a.city, a.province, a.postal_code].filter(Boolean).join(', ');
 
@@ -62,6 +59,7 @@ const Footer: React.FC = () => {
   const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
   const [logoUrl, setLogoUrl] = useState<string>('');
   const [waNumber, setWaNumber] = useState<string>('');
+  const [waMessage, setWaMessage] = useState<string>('Halo, saya butuh bantuan'); // default
   const [emails, setEmails] = useState<Email[]>([]);
   const [addresses, setAddresses] = useState<Address[]>([]);
 
@@ -72,6 +70,8 @@ const Footer: React.FC = () => {
         setSocialLinks(data?.socials || []);
         setLogoUrl(cdn(data?.logo_url));
         setWaNumber(data?.whatsapp_number || '');
+        // ✅ gunakan ?? agar string kosong tetap ditampilkan
+        setWaMessage(data?.whatsapp_message ?? 'Halo, saya butuh bantuan');
         setEmails(data?.emails || []);
         setAddresses(data?.addresses || []);
       } catch (e) {
@@ -83,7 +83,7 @@ const Footer: React.FC = () => {
 
   const waIntl = normalizeWa(waNumber);
   const waHref = waIntl
-    ? `https://wa.me/${waIntl}?text=${encodeURIComponent('Halo, saya butuh bantuan')}`
+    ? `https://wa.me/${waIntl}?text=${encodeURIComponent(waMessage)}`
     : '#';
 
   const emailsToShow = emails.slice(0, 2);
@@ -141,12 +141,14 @@ const Footer: React.FC = () => {
                 href={waHref}
                 className="flex items-center text-gray-300 hover:text-green-400 transition-colors"
                 aria-label="Chat via WhatsApp"
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 <MessageCircle className="w-5 h-5 mr-3 flex-shrink-0" />
                 <span>{waIntl ? `+${waIntl}` : '—'}</span>
               </a>
 
-              {/* Emails (dinamis) */}
+              {/* Emails */}
               {emailsToShow.length ? (
                 emailsToShow.map((e) => (
                   <a
@@ -165,7 +167,7 @@ const Footer: React.FC = () => {
                 </div>
               )}
 
-              {/* Alamat (dinamis + hyperlink ke maps) */}
+              {/* Alamat */}
               {addressesToShow.length ? (
                 addressesToShow.map((a) => (
                   <a
@@ -187,7 +189,7 @@ const Footer: React.FC = () => {
                 </div>
               )}
 
-              {/* Jam layanan (tetap statis, boleh Anda buat dinamis jika diperlukan) */}
+              {/* Jam layanan */}
               <div className="flex items-center text-gray-300">
                 <Clock className="w-5 h-5 mr-3 flex-shrink-0" />
                 <span>24/7 Siap Melayani</span>
