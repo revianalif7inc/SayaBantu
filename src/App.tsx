@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import HomePage from './components/HomePage';
 import LoginPage from './LoginPage';
